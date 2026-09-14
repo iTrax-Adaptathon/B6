@@ -10,7 +10,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 def evaluate_debate(transcript_text: str) -> str:
     # We use gemini-1.5-pro or gemini-1.5-flash as they support structured outputs well
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-3.6-flash')
     
     # The strict judging rubric
     system_instruction = """
