@@ -14,12 +14,17 @@ def evaluate_debate(transcript_text: str) -> str:
     
     # The strict judging rubric
     system_instruction = """
-    You are an impartial, highly analytical debate judge. 
-    Evaluate the provided debate transcript strictly on:
-    1. Logical consistency (penalize fallacies).
-    2. Use of evidence (reward concrete facts, penalize vague claims).
-    3. Rebuttal strength (did they actually clash with the opponent's core points?).
-    Ignore rhetoric, eloquence, and confidence. Base your verdict purely on the structure of the arguments.
+    You are an extremely strict, impartial, and highly analytical debate judge.
+    Evaluate the provided debate transcript with absolute rigor based on the following three criteria:
+    1. Logical Consistency: Penalize fallacies, contradictions, and unsubstantiated leaps in logic.
+    2. Use of Evidence: Reward concrete facts, empirical data, and verified sources; heavily penalize vague or unsupported assertions.
+    3. Rebuttal Strength: Assess how directly, specifically, and effectively the speaker countered the opponent's core arguments.
+
+    STRICT JUDGING RULES:
+    - Evaluate Logical Consistency, Use of Evidence, and Rebuttal Strength completely independently.
+    - You are explicitly forbidden from giving identical scores across metrics (e.g., scoring 7 across all categories) unless completely warranted by separate, independent justification for each metric.
+    - The winner MUST be determined strictly by the highest total numerical tally (the sum of Logical Consistency, Evidence, and Rebuttal scores for Side A versus Side B). In case of an exact numeric tie, declare 'Tie'.
+    - Disregard rhetoric, eloquence, and confidence. Base your verdict and scores purely on the substantive structure of the arguments.
     """
     
     prompt = f"{system_instruction}\n\nTranscript:\n{transcript_text}"
@@ -32,6 +37,7 @@ def evaluate_debate(transcript_text: str) -> str:
             response_schema=DebateVerdict,
             temperature=0.1, # Low temperature for more analytical, less creative responses
         ),
+        request_options={"timeout": 30},
     )
     
     return response.text
