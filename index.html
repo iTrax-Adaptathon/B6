@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Debate Evaluator</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts for typography (Merriweather for serif, Inter for sans) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Merriweather', 'serif'],
+                    },
+                    colors: {
+                        // Custom palette matching the dark/green aesthetic from the screenshot
+                        debate: {
+                            bg: '#1e1e1e',          // Dark gray background
+                            panel: '#252525',       // Slightly lighter gray for panels
+                            header: '#1e2b22',      // Deep green header background
+                            border: '#3a4a3e',      // Subtle green border
+                            accent: '#7ca67c',      // Mint green text accent
+                            text: '#d4d4d4',        // Off-white standard text
+                            muted: '#8a8a8a',       // Gray muted text
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+        }
+        
+        /* Smooth fade-in for the results panel */
+        .fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Custom scrollbar matching the dark theme */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e1e1e; 
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #3a4a3e; 
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #7ca67c; 
+        }
+
+        /* Focus rings for textareas */
+        textarea:focus {
+            outline: none;
+            border-color: #7ca67c;
+            box-shadow: 0 0 0 1px #7ca67c;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col font-sans">
+
+    <header class="bg-debate-header border-b border-debate-border shadow-lg py-6 px-4 md:px-8">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="bg-debate-panel p-3 rounded-lg border border-debate-border">
+                    <i class="fa-solid fa-scale-balanced text-2xl text-debate-accent"></i>
+                </div>
+                <div>
+                    <h1 class="font-serif text-2xl font-bold tracking-wide text-debate-accent">AI Debate Evaluator</h1>
+                    <p class="text-debate-text text-sm font-light mt-1">Objective structural analysis of argument quality</p>
+                </div>
+            </div>
+            <div class="mt-4 md:mt-0 text-sm text-debate-muted flex gap-5">
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-microchip text-debate-accent text-xs"></i> Logic</span>
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-book-open text-debate-accent text-xs"></i> Evidence</span>
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-bolt text-debate-accent text-xs"></i> Clash</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl mx-auto w-full p-4 md:p-8">
+        
+        <div class="mb-8">
+            <h2 class="font-serif text-xl font-bold mb-2 text-white border-b border-debate-border pb-2 inline-block">Transcript Input</h2>
+            <p class="text-debate-muted mb-6 text-sm mt-2 max-w-3xl">
+                Paste the full transcripts for both sides below. The system bypasses sentiment and confidence, strictly evaluating structural linkage, concrete evidence density, and direct rebuttal strength.
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Side A -->
+                <div class="bg-debate-panel p-5 rounded-xl border border-debate-border shadow-sm flex flex-col">
+                    <div class="flex justify-between items-center mb-3">
+                        <label for="transcript-a" class="font-semibold text-white flex items-center gap-2">
+                            <span class="bg-debate-bg border border-debate-border text-debate-accent px-2 py-0.5 rounded text-xs font-bold tracking-wider">SIDE A</span>
+                            Affirmative Argument
+                        </label>
+                    </div>
+                    <textarea id="transcript-a" class="w-full h-72 p-4 rounded-lg bg-debate-bg border border-debate-border text-debate-text placeholder-debate-muted resize-none custom-scrollbar text-sm transition-all" placeholder="e.g., Fellow delegates, it is absolutely undeniable that a global carbon tax is the only way forward. Everyone knows this is the right thing to do..."></textarea>
+                </div>
+
+                <!-- Side B -->
+                <div class="bg-debate-panel p-5 rounded-xl border border-debate-border shadow-sm flex flex-col">
+                    <div class="flex justify-between items-center mb-3">
+                        <label for="transcript-b" class="font-semibold text-white flex items-center gap-2">
+                            <span class="bg-debate-bg border border-debate-border text-debate-accent px-2 py-0.5 rounded text-xs font-bold tracking-wider">SIDE B</span>
+                            Negative Argument
+                        </label>
+                    </div>
+                    <textarea id="transcript-b" class="w-full h-72 p-4 rounded-lg bg-debate-bg border border-debate-border text-debate-text placeholder-debate-muted resize-none custom-scrollbar text-sm transition-all" placeholder="e.g., While the delegate's passion is noted, a universal carbon tax ignores geopolitical realities. According to the UN Economic Report..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-col items-center mb-12">
+            <!-- Inline Validation Error -->
+            <div id="validation-error" class="hidden mb-4 bg-red-900/30 border border-red-800 text-red-400 px-4 py-2.5 rounded-lg text-sm flex items-center gap-2 shadow-sm transition-all">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>Please provide transcript text for both Side A and Side B before evaluating.</span>
+            </div>
+
+            <!-- Evaluate Button -->
+            <button id="evaluate-btn" class="bg-debate-header border border-debate-accent text-debate-accent hover:bg-debate-accent hover:text-debate-header font-semibold py-3 px-10 rounded-lg shadow-lg transition-all duration-300 flex items-center gap-3 active:scale-95 group">
+                <i id="btn-icon" class="fa-solid fa-gavel"></i>
+                <span id="btn-text" class="tracking-wide">Evaluate Debate</span>
+                
+                <!-- Loading spinner (hidden by default) -->
+                <svg id="loading-spinner" class="hidden animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <div id="results-panel" class="hidden bg-debate-panel rounded-2xl shadow-2xl border border-debate-border overflow-hidden mb-12">
+            
+            <!-- Winner Banner -->
+            <div class="bg-debate-header border-b border-debate-border p-8 text-center">
+                <h3 class="text-debate-muted uppercase tracking-widest text-xs font-bold mb-2">Final Verdict</h3>
+                <h2 class="font-serif text-3xl font-bold flex items-center justify-center gap-3 text-white">
+                    <i class="fa-solid fa-trophy text-debate-accent"></i>
+                    Winner: <span id="winner-name" class="text-debate-accent"></span>
+                </h2>
+                <p id="winner-justification" class="mt-4 text-debate-text max-w-3xl mx-auto font-light text-sm leading-relaxed bg-debate-bg/50 p-4 rounded border border-debate-border">
+                    <!-- Final justification text injected here -->
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-debate-border">
+                
+                <!-- Side A Scorecard -->
+                <div class="p-6 md:p-8">
+                    <h3 class="font-bold text-lg text-white border-b border-debate-border pb-3 mb-6 flex items-center justify-between">
+                        Side A Breakdown
+                        <span id="side-a-total" class="bg-debate-bg border border-debate-border text-debate-accent py-1 px-3 rounded text-sm font-mono"></span>
+                    </h3>
+                    
+                    <div class="space-y-6">
+                        <!-- Logic Score -->
+                        <div>
+                            <div class="flex justify-between text-sm mb-1.5">
+                                <span class="font-medium text-debate-text">Logical Consistency</span>
+                                <span class="font-mono text-white" id="a-logic-val"></span>
+                            </div>
+                            <div class="w-full bg-debate-bg rounded-full h-1.5 mb-2 border border-debate-border overflow-hidden">
+                                <div id="a-logic-bar" class="bg-debate-accent h-1.5 rounded-full transition-all duration-1000 ease-out w-0"></div>
+                            </div>
+                            <p class="text-xs text-debate-muted italic" id="a-logic-reason"></p>
+                        </div>
+
+                        <!-- Evidence Score -->
+                        <div>
+                            <div class="flex justify-between text-sm mb-1.5">
+                                <span class="font-medium text-debate-text">Use of Evidence</span>
+                                <span class="font-mono text-white" id="a-evidence-val"></span>
+                            </div>
+                            <div class="w-full bg-debate-bg rounded-full h-1.5 mb-2 border border-debate-border overflow-hidden">
+                                <div id="a-evidence-bar" class="bg-debate-accent h-1.5 rounded-full transition-all duration-1000 ease-out delay-100 w-0"></div>
+                            </div>
+                            <p class="text-xs text-debate-muted italic" id="a-evidence-reason"></p>
+                        </div>
+
+                        <!-- Rebuttal Score -->
+                        <div>
+                            <div class="flex justify-between text-sm mb-1.5">
+                                <span class="font-medium text-debate-text">Strength of Rebuttal</span>
+                                <span class="font-mono text-white" id="a-rebuttal-val"></span>
+                            </div>
+                            <div class="w-full bg-debate-bg rounded-full h-1.5 mb-2 border border-debate-border overflow-hidden">
+                                <div id="a-rebuttal-bar" class="bg-debate-accent h-1.5 rounded-full transition-all duration-1000 ease-out delay-200 w-0"></div>
+                            </div>
+                            <p class="text-xs text-debate-muted italic" id="a-rebuttal-reason"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 md:p-8">
+                    <h3 class="font-bold text-lg text-white border-b border-debate-border pb-3 mb-6 flex items-center justify-between">
+                        Side B Breakdown
+                        <span id="side-b-total" class="bg-debate-bg border border-debate-border text-debate-accent py-1 px-3 rounded text-sm font-mono"></span>
+                    </h3>
+                    
+                    <div class="space-y-6">
+                         <!-- Logic Score -->
+                         <div>
+                            <div class="flex justify-between text-sm mb-1.5">
+                                <span class="font-medium text-debate-text">Logical Consistency</span>
+                                <span class="font-mono text-white" id="b-logic-val"></span>
+                            </div>
+                            <div class="w-full bg-debate-bg rounded-full h-1.5 mb-2 border border-debate-border overflow-hidden">
+                                <div id="b-logic-bar" class="bg-debate-accent h-1.5 rounded-full transition-all duration-1000 ease-out w-0"></div>
+                            </div>
+                            <p class="text-xs text-debate-muted italic" id="b-logic-reason"></p>
+                        </div>
+
+                        <!-- Evidence Score -->
+                        <div>
+                            <div class="flex justify-between text-sm mb-1.5">
+                                <span class="font-medium text-debate-text">Use of Evidence</span>
+                                <span class="font-mono text-white" id="b-evidence-val"></span>
+                            </div>
+                            <div class="w-full bg-debate-bg rounded-full h-1.5 mb-2 border border-debate-border overflow-hidden">
+                                <div id="b-evidence-bar" class="bg-debate-accent h-1.5 rounded-full transition-all duration-1000 ease-out delay-100 w-0"></div>
+                            </div>
+                            <p class="text-xs text-debate-muted italic" id="b-evidence-reason"></p>
+                        </div>
+
+                        <!-- Rebuttal Score -->
+                        <div>
+                            <div class="flex justify-between text-sm mb-1.5">
+                                <span class="font-medium text-debate-text">Strength of Rebuttal</span>
+                                <span class="font-mono text-white" id="b-rebuttal-val"></span>
+                            </div>
+                            <div class="w-full bg-debate-bg rounded-full h-1.5 mb-2 border border-debate-border overflow-hidden">
+                                <div id="b-rebuttal-bar" class="bg-debate-accent h-1.5 rounded-full transition-all duration-1000 ease-out delay-200 w-0"></div>
+                            </div>
+                            <p class="text-xs text-debate-muted italic" id="b-rebuttal-reason"></p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
+            const evaluateBtn = document.getElementById('evaluate-btn');
+            const transcriptA = document.getElementById('transcript-a');
+            const transcriptB = document.getElementById('transcript-b');
+            const errorMsg = document.getElementById('validation-error');
+            const resultsPanel = document.getElementById('results-panel');
+            
+            const btnText = document.getElementById('btn-text');
+            const btnIcon = document.getElementById('btn-icon');
+            const loadingSpinner = document.getElementById('loading-spinner');
+
+            // Hardcoded mock data matching the Pydantic backend output
+            const mockVerdict = {
+                side_a_eval: {
+                    logical_consistency_score: 5,
+                    logical_consistency_reasoning: "This side's reasoning is partially structured and uses a mostly coherent causal flow.",
+                    evidence_score: 7,
+                    evidence_reasoning: "This side relies on general assertions without citing concrete quantitative facts.",
+                    rebuttal_score: 4,
+                    rebuttal_reasoning: "This side partially addresses counterarguments but fails to engage with the opponent's core warrant."
+                },
+                side_b_eval: {
+                    logical_consistency_score: 5,
+                    logical_consistency_reasoning: "This side's reasoning is partially structured and uses a mostly coherent causal flow.",
+                    evidence_score: 9,
+                    evidence_reasoning: "This side includes highly concrete quantitative and factual references in its case.",
+                    rebuttal_score: 8,
+                    rebuttal_reasoning: "This side directly challenges the opposing case and provides structural counter-examples."
+                },
+                winner: "Side B",
+                final_justification: "The decision is based on the transcript's structure, evidence density, and the quality of rebuttal. Side B is favored because it includes specific data, policy alternatives, and more direct engagement with the opposing argument."
+            };
+
+            // Helper function to update the DOM for a specific side's scorecard
+            const populateScorecard = (sidePrefix, evalData) => {
+                const totalScore = evalData.logical_consistency_score + evalData.evidence_score + evalData.rebuttal_score;
+                
+                // Update numerical text values
+                document.getElementById(`${sidePrefix}-total`).innerText = `${totalScore} / 30`;
+                document.getElementById(`${sidePrefix}-logic-val`).innerText = `${evalData.logical_consistency_score}/10`;
+                document.getElementById(`${sidePrefix}-evidence-val`).innerText = `${evalData.evidence_score}/10`;
+                document.getElementById(`${sidePrefix}-rebuttal-val`).innerText = `${evalData.rebuttal_score}/10`;
+                
+                // Update reasoning text
+                document.getElementById(`${sidePrefix}-logic-reason`).innerText = `"${evalData.logical_consistency_reasoning}"`;
+                document.getElementById(`${sidePrefix}-evidence-reason`).innerText = `"${evalData.evidence_reasoning}"`;
+                document.getElementById(`${sidePrefix}-rebuttal-reason`).innerText = `"${evalData.rebuttal_reasoning}"`;
+
+                // Animate progress bars (delayed slightly so the CSS transition triggers after panel becomes visible)
+                setTimeout(() => {
+                    document.getElementById(`${sidePrefix}-logic-bar`).style.width = `${evalData.logical_consistency_score * 10}%`;
+                    document.getElementById(`${sidePrefix}-evidence-bar`).style.width = `${evalData.evidence_score * 10}%`;
+                    document.getElementById(`${sidePrefix}-rebuttal-bar`).style.width = `${evalData.rebuttal_score * 10}%`;
+                }, 50);
+            };
+
+            // Reset widths to 0 before animating
+            const resetProgressBars = () => {
+                const bars = ['a-logic', 'a-evidence', 'a-rebuttal', 'b-logic', 'b-evidence', 'b-rebuttal'];
+                bars.forEach(id => {
+                    document.getElementById(`${id}-bar`).style.width = '0%';
+                });
+            };
+
+            // Main event listener for evaluation
+            evaluateBtn.addEventListener('click', () => {
+                // 1. Validation check (Strictly avoiding alert())
+                if (transcriptA.value.trim() === '' || transcriptB.value.trim() === '') {
+                    errorMsg.classList.remove('hidden');
+                    resultsPanel.classList.add('hidden');
+                    return;
+                }
+                
+                // Clear error if valid
+                errorMsg.classList.add('hidden');
+                resetProgressBars();
+
+                // 2. Trigger Loading State
+                evaluateBtn.disabled = true;
+                evaluateBtn.classList.add('opacity-75', 'cursor-not-allowed');
+                btnText.innerText = "Analyzing Transcript...";
+                btnIcon.classList.add('hidden');
+                loadingSpinner.classList.remove('hidden');
+                resultsPanel.classList.add('hidden');
+                resultsPanel.classList.remove('fade-in'); // Reset animation
+
+                // 3. Simulate Network Request (2 seconds)
+                setTimeout(() => {
+                    // Revert button state
+                    evaluateBtn.disabled = false;
+                    evaluateBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+                    btnText.innerText = "Re-Evaluate";
+                    btnIcon.classList.remove('hidden');
+                    loadingSpinner.classList.add('hidden');
+
+                    // Populate Top-level Verdict
+                    document.getElementById('winner-name').innerText = mockVerdict.winner;
+                    document.getElementById('winner-justification').innerText = mockVerdict.final_justification;
+
+                    // Populate Scorecards
+                    populateScorecard('side-a', mockVerdict.side_a_eval);
+                    populateScorecard('side-b', mockVerdict.side_b_eval);
+
+                    // Reveal Results Panel
+                    resultsPanel.classList.remove('hidden');
+                    resultsPanel.classList.add('fade-in');
+                    
+                    // Smooth scroll to results
+                    setTimeout(() => {
+                        resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 100);
+
+                }, 2000);
+            });
+
+            // Clear the validation error smoothly when user starts typing
+            const clearError = () => {
+                if (!errorMsg.classList.contains('hidden')) {
+                    errorMsg.classList.add('hidden');
+                }
+            };
+            transcriptA.addEventListener('input', clearError);
+            transcriptB.addEventListener('input', clearError);
+        });
+    </script>
+</body>
+</html>
