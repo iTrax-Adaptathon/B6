@@ -126,33 +126,32 @@ def _build_fallback_verdict(transcript_text: str) -> str:
 
 
 def evaluate_debate(transcript_text: str) -> str:
-    try:
-        client = _configure_genai()
-
-        system_instruction = """
-        You are an impartial, highly analytical debate judge.
-        Evaluate the provided debate transcript strictly on:
-        1. Logical consistency (penalize fallacies).
-        2. Use of evidence (reward concrete facts, penalize vague claims).
-        3. Rebuttal strength (did they actually clash with the opponent's core points?).
-        Ignore rhetoric, eloquence, and confidence. Base your verdict purely on the structure of the arguments.
-        """
-
-        prompt = f"{system_instruction}\n\nTranscript:\n{transcript_text}"
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=DebateVerdict,
-                temperature=0.1,
-            ),
-        )
-        return response.text
-    except Exception as exc:  # pragma: no cover - fallback path is intentional for offline / blocked API access
-        print(f"Gemini is unavailable; falling back to the local heuristic judge. Reason: {exc}", file=sys.stderr)
-        return _build_fallback_verdict(transcript_text)
-
+    # We use gemini-1.5-pro or gemini-1.5-flash as they support structured outputs well
+    model = genai.GenerativeModel('gemini-3.6-flash')
+    
+    # The strict judging rubric
+    system_instruction = """
+    You are an impartial, highly analytical debate judge. 
+    Evaluate the provided debate transcript strictly on:
+    1. Logical consistency (penalize fallacies).
+    2. Use of evidence (reward concrete facts, penalize vague claims).
+    3. Rebuttal strength (did they actually clash with the opponent's core points?).
+    Ignore rhetoric, eloquence, and confidence. Base your verdict purely on the structure of the arguments.
+    """
+    
+    prompt = f"{system_instruction}\n\nTranscript:\n{transcript_text}"
+    
+    # Force the LLM to return data matching our DebateVerdict schema
+    response = model.generate_content(
+        prompt,
+        generation_config=genai.GenerationConfig(
+            response_mime_type="application/json",
+            response_schema=DebateVerdict,
+            temperature=0.1, # Low temperature for more analytical, less creative responses
+        ),
+    )
+    
+    return response.text
 
 if __name__ == "__main__":
     with open("data/transcript.json", "r", encoding="utf-8") as file:
