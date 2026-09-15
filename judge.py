@@ -1,162 +1,269 @@
 import json
 import os
-import re
-import sys
-from typing import Any
-
-try:
-    from google import genai
-    from google.genai import types
-except Exception:  # pragma: no cover - dependency may be absent in non-Google environments
-    genai = None
-    types = None
 
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 from models import DebateVerdict
 
 load_dotenv()
 
 
-def _to_json_string(model_obj: Any) -> str:
-    if hasattr(model_obj, "model_dump_json"):
-        return model_obj.model_dump_json()
-    if hasattr(model_obj, "dict"):
-        return json.dumps(model_obj.dict())
-    return json.dumps(model_obj)
+def calculate_deterministic_winner(result_data: dict) -> dict:
+    """
+    Calculate the final winner using only the numerical scores.
 
+    This prevents the AI from arbitrarily choosing a winner.
+    """
 
-def _configure_genai():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if genai is None:
-        raise RuntimeError("google-genai is not installed.")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is not set.")
-    return genai.Client(api_key=api_key)
+    side_a = result_data["side_a_eval"]
+    side_b = result_data["side_b_eval"]
 
+    side_a_total = (
+        side_a["logical_consistency_score"]
+        + side_a["evidence_score"]
+        + side_a["rebuttal_score"]
+    )
 
-def _parse_transcript_entries(transcript_text: str):
-    try:
-        parsed = json.loads(transcript_text)
-        if isinstance(parsed, list):
-            return parsed
-        if isinstance(parsed, dict):
-            for key in ("transcript", "entries", "debate"):
-                value = parsed.get(key)
-                if isinstance(value, list):
-                    return value
-    except json.JSONDecodeError:
-        pass
-
-    return [{"speaker": "Unknown", "text": transcript_text}]
-
-
-def _score_side(entries, speaker_name: str):
-    texts = [entry.get("text", "") for entry in entries if entry.get("speaker") == speaker_name]
-    content = " ".join(texts).lower()
-    if not content:
-        return {
-            "logical_consistency_score": 0,
-            "logical_consistency_reasoning": "No statements were provided for this side.",
-            "evidence_score": 0,
-            "evidence_reasoning": "No evidence was provided for this side.",
-            "rebuttal_score": 0,
-            "rebuttal_reasoning": "No rebuttal was provided for this side.",
-        }
-
-    logical_score = 5
-    evidence_score = 3
-    rebuttal_score = 4
-
-    if any(word in content for word in ["because", "therefore", "if", "so", "which means"]):
-        logical_score += 2
-    if any(word in content for word in ["everyone knows", "absolutely", "obviously"]):
-        logical_score -= 2
-    if any(word in content for word in ["according to", "study", "report", "data", "estimate", "estimated", "gdp", "historical", "percentage", "%", "un", "research"]):
-        evidence_score += 4
-    if re.search(r"\d+(?:\.\d+)?%|\d+(?:\.\d+)?", content):
-        evidence_score += 2
-    if any(word in content for word in ["however", "while", "but", "instead", "on the other hand", "rebuttal", "disproportionately", "harm", "historical output", "developing nations"]):
-        rebuttal_score += 3
-    if any(word in content for word in ["we propose", "our proposal", "we believe", "as an alternative"]):
-        rebuttal_score += 1
-
-    logical_score = max(0, min(10, logical_score))
-    evidence_score = max(0, min(10, evidence_score))
-    rebuttal_score = max(0, min(10, rebuttal_score))
-
-    return {
-        "logical_consistency_score": logical_score,
-        "logical_consistency_reasoning": f"This side's reasoning is {'strongly structured' if logical_score >= 6 else 'partially structured'} and uses a mostly coherent causal flow.",
-        "evidence_score": evidence_score,
-        "evidence_reasoning": f"This side includes {'concrete quantitative or factual references' if evidence_score >= 6 else 'limited factual grounding'} in its case.",
-        "rebuttal_score": rebuttal_score,
-        "rebuttal_reasoning": f"This side {'directly challenges the opposing case' if rebuttal_score >= 6 else 'partially addresses the counterarguments'} in a relevant way.",
-    }
-
-
-def _build_fallback_verdict(transcript_text: str) -> str:
-    entries = _parse_transcript_entries(transcript_text)
-    side_a = _score_side(entries, "Side A")
-    side_b = _score_side(entries, "Side B")
-
-    side_a_total = side_a["logical_consistency_score"] + side_a["evidence_score"] + side_a["rebuttal_score"]
-    side_b_total = side_b["logical_consistency_score"] + side_b["evidence_score"] + side_b["rebuttal_score"]
+    side_b_total = (
+        side_b["logical_consistency_score"]
+        + side_b["evidence_score"]
+        + side_b["rebuttal_score"]
+    )
 
     if side_a_total > side_b_total:
         winner = "Side A"
+
     elif side_b_total > side_a_total:
         winner = "Side B"
+
     else:
         winner = "Tie"
 
-    verdict = {
-        "side_a_eval": side_a,
-        "side_b_eval": side_b,
-        "winner": winner,
-        "final_justification": (
-            "The decision is based on the transcript's structure, evidence density, and the quality of rebuttal. "
-            "Side B is favored because it includes specific data, policy alternatives, and more direct engagement with the opposing argument."
-            if winner == "Side B"
-            else "The decision is based on the transcript's structure, evidence density, and rebuttal quality. The sides were closely matched on substance."
-        ),
-    }
 
-    return _to_json_string(DebateVerdict(**verdict))
+    score_difference = abs(
+        side_a_total - side_b_total
+    )
+
+
+    # Simple verdict confidence based on score gap
+
+    if score_difference >= 6:
+        confidence = "High"
+
+    elif score_difference >= 3:
+        confidence = "Medium"
+
+    else:
+        confidence = "Low"
+
+
+    result_data["winner"] = winner
+
+    result_data["side_a_total"] = side_a_total
+    result_data["side_b_total"] = side_b_total
+
+    result_data["verdict_confidence"] = confidence
+
+    result_data["score_difference"] = score_difference
+
+
+    result_data["comparative_analysis"] = (
+        f"Side A scored {side_a_total}/30 while "
+        f"Side B scored {side_b_total}/30. "
+        f"The score difference is {score_difference} points. "
+        f"Based on the deterministic scoring rule, "
+        f"the final result is {winner}."
+    )
+
+
+    if winner == "Side A":
+
+        result_data["final_justification"] = (
+            f"Side A wins with {side_a_total}/30 "
+            f"against Side B's {side_b_total}/30. "
+            f"The verdict is determined directly from the "
+            f"combined Logic, Evidence, and Rebuttal scores."
+        )
+
+    elif winner == "Side B":
+
+        result_data["final_justification"] = (
+            f"Side B wins with {side_b_total}/30 "
+            f"against Side A's {side_a_total}/30. "
+            f"The verdict is determined directly from the "
+            f"combined Logic, Evidence, and Rebuttal scores."
+        )
+
+    else:
+
+        result_data["final_justification"] = (
+            f"Both sides scored {side_a_total}/30. "
+            f"The deterministic scoring system therefore "
+            f"declares the debate a tie."
+        )
+
+
+    return result_data
+
 
 
 def evaluate_debate(transcript_text: str) -> str:
-    # We use gemini-1.5-pro or gemini-1.5-flash as they support structured outputs well
-    model = genai.GenerativeModel('gemini-3.6-flash')
-    
-    # The strict judging rubric
-    system_instruction = """
-    You are an impartial, highly analytical debate judge. 
-    Evaluate the provided debate transcript strictly on:
-    1. Logical consistency (penalize fallacies).
-    2. Use of evidence (reward concrete facts, penalize vague claims).
-    3. Rebuttal strength (did they actually clash with the opponent's core points?).
-    Ignore rhetoric, eloquence, and confidence. Base your verdict purely on the structure of the arguments.
-    """
-    
-    prompt = f"{system_instruction}\n\nTranscript:\n{transcript_text}"
-    
-    # Force the LLM to return data matching our DebateVerdict schema
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=DebateVerdict,
-            temperature=0.1, # Low temperature for more analytical, less creative responses
-        ),
+
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        raise RuntimeError(
+            "GEMINI_API_KEY is not set in the .env file."
+        )
+
+
+    client = genai.Client(
+        api_key=api_key
     )
-    
-    return response.text
+
+
+    system_instruction = """
+You are an impartial and highly analytical debate evaluator.
+
+Your task is ONLY to evaluate the quality of the arguments.
+
+Evaluate both sides using these three categories:
+
+1. Logical Consistency
+   - Score from 0 to 10.
+   - Reward coherent reasoning.
+   - Penalize contradictions, unsupported assumptions,
+     and logical fallacies.
+
+2. Use of Evidence
+   - Score from 0 to 10.
+   - Reward concrete facts, statistics, examples,
+     data, and relevant evidence.
+   - Penalize vague or unsupported claims.
+
+3. Strength of Rebuttal
+   - Score from 0 to 10.
+   - Evaluate how directly each side responds
+     to the opponent's core arguments.
+   - Reward effective counterarguments.
+
+Important:
+
+Do NOT judge based on:
+- confidence
+- emotional language
+- rhetoric
+- writing style
+- verbosity
+
+The final winner will be calculated separately
+by the backend from the numerical scores.
+
+Still return all fields required by the response schema.
+
+For the winner field, you may return "Tie".
+For final_justification and comparative_analysis,
+briefly explain the score differences without
+overriding the mathematical score totals.
+"""
+
+
+    prompt = f"""
+{system_instruction}
+
+DEBATE TRANSCRIPT:
+
+{transcript_text}
+
+Return a structured evaluation for both sides.
+"""
+
+
+    response = client.models.generate_content(
+
+        model="gemini-3.6-flash",
+
+        contents=prompt,
+
+        config=types.GenerateContentConfig(
+
+            temperature=0.1,
+
+            response_mime_type="application/json",
+
+            response_schema=DebateVerdict,
+
+        ),
+
+    )
+
+
+    if not response.text:
+
+        raise RuntimeError(
+            "Gemini returned an empty response."
+        )
+
+
+    # Convert Gemini JSON response to Python dictionary
+
+    result_data = json.loads(
+        response.text
+    )
+
+
+    # IMPORTANT:
+    # Gemini does not control the final winner anymore.
+
+    result_data = calculate_deterministic_winner(
+        result_data
+    )
+
+
+    # Return the updated result to FastAPI
+
+    return json.dumps(
+        result_data,
+        ensure_ascii=False
+    )
+
+
 
 if __name__ == "__main__":
-    with open("data/transcript.json", "r", encoding="utf-8") as file:
+
+    with open(
+        "data/transcript.json",
+        "r",
+        encoding="utf-8"
+    ) as file:
+
         debate_data = json.load(file)
 
-    result = evaluate_debate(json.dumps(debate_data, ensure_ascii=False))
-    parsed_result = json.loads(result)
-    print(json.dumps(parsed_result, indent=2))
+
+    result = evaluate_debate(
+
+        json.dumps(
+            debate_data,
+            ensure_ascii=False
+        )
+
+    )
+
+
+    parsed_result = json.loads(
+        result
+    )
+
+
+    print(
+
+        json.dumps(
+            parsed_result,
+            indent=2,
+            ensure_ascii=False
+        )
+
+    )
+    
